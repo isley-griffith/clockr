@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Clockr - Time Tracker</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div class="app-container">
+      <header class="header">
+        <h1>Clockr</h1>
+        <div class="header-actions">
+          <div class="workspace-count-control">
+            <label for="workspace-count">Workspaces:</label>
+            <select id="workspace-count">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+            </select>
+          </div>
+          <button id="export-btn" class="btn btn-secondary">Export CSV</button>
+          <button id="clear-btn" class="btn btn-danger">Clear All</button>
+        </div>
+      </header>
+
+      <main class="split-screen" id="workspaces-container">
+        <!-- Workspaces will be dynamically generated -->
+      </main>
+
+      <footer class="footer">
+        <div class="total-today">
+          <span>Today's Total:</span>
+          <span id="total-time">00:00:00</span>
+        </div>
+      </footer>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
