@@ -675,6 +675,246 @@ async function changeWorkspaceCount(newCount) {
   updateTotalTime();
 }
 
+// Current view state
+let currentView = 'timer';
+let recordsFilter = { workspace: 'all', date: 'all' };
+
+// Switch view
+function switchView(view) {
+  currentView = view;
+  
+  // Update tab buttons
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === view);
+  });
+  
+  // Update view visibility
+  document.querySelectorAll('.view').forEach(v => {
+    v.classList.toggle('active', v.id === `${view}-view`);
+  });
+  
+  // Show/hide workspace control (only in timer view)
+  const workspaceControl = document.getElementById('workspace-control');
+  if (workspaceControl) {
+    workspaceControl.style.display = view === 'timer' ? 'flex' : 'none';
+  }
+  
+  // Show/hide clear button (only in timer view)
+  const clearBtn = document.getElementById('clear-btn');
+  if (clearBtn) {
+    clearBtn.style.display = view === 'timer' ? 'inline-block' : 'none';
+  }
+  
+  // Load records when switching to records view
+  if (view === 'records') {
+    loadRecordsView();
+  }
+}
+
+// Load all records from database
+async function loadAllRecords() {
+  const records = await db.select(`
+    SELECT e.id, e.workspace_id, e.start_time, e.end_time, e.duration, e.description, w.name as workspace_name
+    FROM entries e
+    LEFT JOIN workspaces w ON e.workspace_id = w.id
+    ORDER BY e.start_time DESC
+  `);
+  
+  return records.map(r => ({
+    id: r.id,
+    workspaceId: r.workspace_id,
+    workspaceName: r.workspace_name || `Workspace ${r.workspace_id}`,
+    startTime: r.start_time,
+    endTime: r.end_time,
+    duration: r.duration,
+    description: r.description || 'No description'
+  }));
+}
+
+// Filter records based on current filter
+function filterRecords(records) {
+  let filtered = [...records];
+  
+  // Filter by workspace
+  if (recordsFilter.workspace !== 'all') {
+    const wsId = parseInt(recordsFilter.workspace);
+    filtered = filtered.filter(r => r.workspaceId === wsId);
+  }
+  
+  // Filter by date
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  
+  if (recordsFilter.date === 'today') {
+    filtered = filtered.filter(r => new Date(r.startTime) >= today);
+  } else if (recordsFilter.date === 'week') {
+    const weekAgo = new Date(today);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    filtered = filtered.filter(r => new Date(r.startTime) >= weekAgo);
+  } else if (recordsFilter.date === 'month') {
+    const monthAgo = new Date(today);
+    monthAgo.setMonth(monthAgo.getMonth() - 1);
+    filtered = filtered.filter(r => new Date(r.startTime) >= monthAgo);
+  }
+  
+  return filtered;
+}
+
+// Load records view
+async function loadRecordsView() {
+  // Update workspace filter options
+  const wsFilter = document.getElementById('filter-workspace');
+  wsFilter.innerHTML = '<option value="all">All</option>';
+  for (let i = 1; i <= state.workspaceCount; i++) {
+    const name = state.workspaceNames[i] || `Workspace ${i}`;
+    wsFilter.innerHTML += `<option value="${i}">${escapeHtml(name)}</option>`;
+  }
+  wsFilter.value = recordsFilter.workspace;
+  
+  // Load and filter records
+  const allRecords = await loadAllRecords();
+  const filtered = filterRecords(allRecords);
+  
+  // Update summary
+  const totalEntries = filtered.length;
+  const totalDuration = filtered.reduce((sum, r) => sum + r.duration, 0);
+  const avgDuration = totalEntries > 0 ? totalDuration / totalEntries : 0;
+  
+  document.getElementById('total-entries').textContent = totalEntries;
+  document.getElementById('total-duration').textContent = formatTime(totalDuration);
+  document.getElementById('avg-duration').textContent = formatTime(avgDuration);
+  
+  // Render table
+  renderRecordsTable(filtered);
+}
+
+// Render records table
+function renderRecordsTable(records) {
+  const tbody = document.getElementById('records-tbody');
+  const emptyState = document.getElementById('records-empty');
+  const tableWrapper = document.querySelector('.records-table-wrapper');
+  
+  if (records.length === 0) {
+    tbody.innerHTML = '';
+    emptyState.style.display = 'flex';
+    tableWrapper.style.display = 'none';
+    return;
+  }
+  
+  emptyState.style.display = 'none';
+  tableWrapper.style.display = 'block';
+  
+  tbody.innerHTML = records.map(record => {
+    const startDate = new Date(record.startTime);
+    const endDate = new Date(record.endTime);
+    const color = WORKSPACE_COLORS[(record.workspaceId - 1) % WORKSPACE_COLORS.length];
+    
+    return `
+      <tr data-id="${record.id}" data-workspace="${record.workspaceId}">
+        <td>${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+        <td><span class="workspace-badge" style="background-color: ${color}20; color: ${color}">${escapeHtml(record.workspaceName)}</span></td>
+        <td>${startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</td>
+        <td>${endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</td>
+        <td class="duration-cell">${formatTime(record.duration)}</td>
+        <td class="description-cell" title="${escapeHtml(record.description)}">${escapeHtml(record.description)}</td>
+        <td class="actions-cell">
+          <button class="action-btn edit-record" title="Edit" data-id="${record.id}">✏️</button>
+          <button class="action-btn delete delete-record" title="Delete" data-id="${record.id}" data-workspace="${record.workspaceId}">🗑️</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+  
+  // Attach event listeners
+  tbody.querySelectorAll('.edit-record').forEach(btn => {
+    btn.addEventListener('click', () => editRecordInTable(parseInt(btn.dataset.id)));
+  });
+  
+  tbody.querySelectorAll('.delete-record').forEach(btn => {
+    btn.addEventListener('click', () => deleteRecordFromTable(parseInt(btn.dataset.id), parseInt(btn.dataset.workspace)));
+  });
+}
+
+// Edit record from table
+async function editRecordInTable(id) {
+  const row = document.querySelector(`tr[data-id="${id}"]`);
+  if (!row) return;
+  
+  const descCell = row.querySelector('.description-cell');
+  const currentText = descCell.textContent;
+  
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'entry-edit-input';
+  input.value = currentText;
+  input.style.width = '100%';
+  
+  descCell.innerHTML = '';
+  descCell.appendChild(input);
+  input.focus();
+  input.select();
+  
+  const saveEdit = async () => {
+    const newValue = input.value.trim() || 'No description';
+    await updateEntry(id, newValue);
+    
+    // Update local state
+    for (let i = 1; i <= state.workspaceCount; i++) {
+      const entry = state.entries[i]?.find(e => e.id === id);
+      if (entry) {
+        entry.description = newValue;
+        break;
+      }
+    }
+    
+    await loadRecordsView();
+  };
+  
+  input.addEventListener('blur', saveEdit);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      input.blur();
+    } else if (e.key === 'Escape') {
+      input.value = currentText;
+      input.blur();
+    }
+  });
+}
+
+// Delete record from table
+async function deleteRecordFromTable(id, workspaceId) {
+  const row = document.querySelector(`tr[data-id="${id}"]`);
+  if (!row) return;
+  
+  if (row.classList.contains('confirm-delete')) {
+    await deleteEntryFromDb(id);
+    state.entries[workspaceId] = (state.entries[workspaceId] || []).filter(e => e.id !== id);
+    await loadRecordsView();
+    updateTotalTime();
+  } else {
+    row.classList.add('confirm-delete');
+    row.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+    const deleteBtn = row.querySelector('.delete-record');
+    if (deleteBtn) {
+      deleteBtn.textContent = '✓';
+      deleteBtn.title = 'Click again to confirm';
+    }
+    
+    // Auto-reset after 3 seconds
+    setTimeout(() => {
+      if (row.classList.contains('confirm-delete')) {
+        row.classList.remove('confirm-delete');
+        row.style.backgroundColor = '';
+        if (deleteBtn) {
+          deleteBtn.textContent = '🗑️';
+          deleteBtn.title = 'Delete';
+        }
+      }
+    }, 3000);
+  }
+}
+
 // Initialize
 window.addEventListener("DOMContentLoaded", async () => {
   try {
@@ -682,6 +922,22 @@ window.addEventListener("DOMContentLoaded", async () => {
     await loadState();
     renderWorkspaces();
     updateTotalTime();
+    
+    // View tabs
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => switchView(btn.dataset.view));
+    });
+    
+    // Records filters
+    document.getElementById('filter-workspace').addEventListener('change', (e) => {
+      recordsFilter.workspace = e.target.value;
+      loadRecordsView();
+    });
+    
+    document.getElementById('filter-date').addEventListener('change', (e) => {
+      recordsFilter.date = e.target.value;
+      loadRecordsView();
+    });
     
     // Workspace count selector
     document.getElementById("workspace-count").addEventListener("change", async (e) => {
@@ -700,6 +956,10 @@ window.addEventListener("DOMContentLoaded", async () => {
         clearBtn.textContent = "Clear All";
         clearBtn.classList.remove("confirming");
         clearConfirm = false;
+        // Refresh records view if active
+        if (currentView === 'records') {
+          await loadRecordsView();
+        }
       } else {
         clearBtn.textContent = "Confirm Clear?";
         clearBtn.classList.add("confirming");
@@ -716,6 +976,9 @@ window.addEventListener("DOMContentLoaded", async () => {
     
     // Keyboard shortcuts
     document.addEventListener("keydown", (e) => {
+      // Only in timer view
+      if (currentView !== 'timer') return;
+      
       // Press 1-4 to toggle workspace timers
       const num = parseInt(e.key);
       if (num >= 1 && num <= 4 && !e.ctrlKey && !e.metaKey && document.activeElement.tagName !== "INPUT") {

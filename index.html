@@ -9,9 +9,15 @@
   <body>
     <div class="app-container">
       <header class="header">
-        <h1>Clockr</h1>
+        <div class="header-left">
+          <h1>Clockr</h1>
+          <nav class="view-tabs">
+            <button class="tab-btn active" data-view="timer">Timer</button>
+            <button class="tab-btn" data-view="records">Records</button>
+          </nav>
+        </div>
         <div class="header-actions">
-          <div class="workspace-count-control">
+          <div class="workspace-count-control" id="workspace-control">
             <label for="workspace-count">Workspaces:</label>
             <select id="workspace-count">
               <option value="1">1</option>
@@ -25,8 +31,72 @@
         </div>
       </header>
 
-      <main class="split-screen" id="workspaces-container">
-        <!-- Workspaces will be dynamically generated -->
+      <!-- Timer View -->
+      <main class="view active" id="timer-view">
+        <div class="split-screen" id="workspaces-container">
+          <!-- Workspaces will be dynamically generated -->
+        </div>
+      </main>
+
+      <!-- Records View -->
+      <main class="view" id="records-view">
+        <div class="records-container">
+          <div class="records-header">
+            <h2>All Time Records</h2>
+            <div class="records-filters">
+              <div class="filter-group">
+                <label for="filter-workspace">Workspace:</label>
+                <select id="filter-workspace">
+                  <option value="all">All</option>
+                </select>
+              </div>
+              <div class="filter-group">
+                <label for="filter-date">Date:</label>
+                <select id="filter-date">
+                  <option value="all">All Time</option>
+                  <option value="today">Today</option>
+                  <option value="week">This Week</option>
+                  <option value="month">This Month</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="records-summary">
+            <div class="summary-card">
+              <span class="summary-label">Total Entries</span>
+              <span class="summary-value" id="total-entries">0</span>
+            </div>
+            <div class="summary-card">
+              <span class="summary-label">Total Time</span>
+              <span class="summary-value" id="total-duration">00:00:00</span>
+            </div>
+            <div class="summary-card">
+              <span class="summary-label">Avg per Entry</span>
+              <span class="summary-value" id="avg-duration">00:00:00</span>
+            </div>
+          </div>
+          <div class="records-table-wrapper">
+            <table class="records-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Workspace</th>
+                  <th>Start</th>
+                  <th>End</th>
+                  <th>Duration</th>
+                  <th>Description</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="records-tbody">
+                <!-- Records will be dynamically generated -->
+              </tbody>
+            </table>
+          </div>
+          <div class="records-empty" id="records-empty" style="display: none;">
+            No time records found. Start tracking time to see your records here.
+          </div>
+        </div>
       </main>
 
       <footer class="footer">
